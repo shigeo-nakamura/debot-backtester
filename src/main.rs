@@ -67,7 +67,13 @@ fn run_tests(input_files_dir: &str, output_files_dir: &str) -> Result<()> {
 
     for entry in entries {
         let entry = entry?;
-        backtest(entry.path(), output_path.clone());
+        let file_path = entry.path();
+
+        if let Some(extension) = file_path.extension() {
+            if extension == "txt" {
+                backtest(file_path, output_path.clone());
+            }
+        }
     }
 
     Ok(())
@@ -155,8 +161,17 @@ fn backtest(test_file_path: PathBuf, output_dir_path: PathBuf) {
     for price in prices {
         market_data.add_price(Some(price), None);
         let market_condition = market_data.assess_market_condition();
+        let (rsi, is_expanding, trend_type) = market_data.get_market_detail();
         // Write the price and market condition to the output file
-        if let Err(e) = writeln!(output_file, "{}, {}", price, market_condition.to_numeric()) {
+        if let Err(e) = writeln!(
+            output_file,
+            "{}, {}, {}, {}, {:?}",
+            price,
+            market_condition.to_numeric(),
+            rsi,
+            is_expanding,
+            trend_type
+        ) {
             log::error!("Error writing to file: {}", e);
             return;
         }
