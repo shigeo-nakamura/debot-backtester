@@ -2,6 +2,7 @@ use chrono::Local;
 use clap::{App, Arg};
 use debot_db::TransactionLog;
 use debot_market_analyzer::MarketData;
+use debot_market_analyzer::TradingStrategy;
 use std::env;
 use std::fs;
 use std::fs::File;
@@ -150,27 +151,57 @@ fn backtest(test_file_path: PathBuf, output_dir_path: PathBuf) {
         }
     }
 
+    let short_period = 15 * 4;
+    let long_period = 60 * 4;
+    let trading_period = 60;
     let mut market_data = MarketData::new(
         "backtester".to_owned(),
-        60 * 60,
-        240 * 60,
-        60 * 60,
+        short_period * 60,
+        long_period * 60,
+        trading_period * 60,
         60 * 60 * 24,
     );
 
     for price in prices {
         market_data.add_price(Some(price), None);
         let market_condition = market_data.assess_market_condition();
-        let (rsi, is_expanding, trend_type) = market_data.get_market_detail();
+        let (rsi, rsi_short, rsi_long, is_expanding, trend_type, is_breakout, is_crossover, adx) =
+            market_data.get_market_detail();
+
+        let open_action_trendfollow =
+            match market_data.is_open_signaled(TradingStrategy::TrendFollow) {
+                debot_market_analyzer::TradeAction::None => 1.0,
+                debot_market_analyzer::TradeAction::BuyOpen(_) => 1.025,
+                debot_market_analyzer::TradeAction::BuyClose => 1.0,
+                debot_market_analyzer::TradeAction::SellOpen(_) => 0.975,
+                debot_market_analyzer::TradeAction::SellClose => 1.0,
+            };
+
+        let open_action_meanreversion =
+            match market_data.is_open_signaled(TradingStrategy::MeanReversion) {
+                debot_market_analyzer::TradeAction::None => 1.0,
+                debot_market_analyzer::TradeAction::BuyOpen(_) => 1.05,
+                debot_market_analyzer::TradeAction::BuyClose => 1.0,
+                debot_market_analyzer::TradeAction::SellOpen(_) => 0.95,
+                debot_market_analyzer::TradeAction::SellClose => 1.0,
+            };
+
         // Write the price and market condition to the output file
         if let Err(e) = writeln!(
             output_file,
-            "{}, {}, {}, {}, {:?}",
+            "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}",
             price,
             market_condition.to_numeric(),
             rsi,
+            rsi_short,
+            rsi_long,
             is_expanding,
-            trend_type
+            trend_type,
+            is_breakout,
+            is_crossover,
+            adx,
+            open_action_trendfollow,
+            open_action_meanreversion,
         ) {
             log::error!("Error writing to file: {}", e);
             return;
