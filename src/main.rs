@@ -160,6 +160,8 @@ fn backtest(test_file_path: PathBuf, output_dir_path: PathBuf) {
         long_period * 60,
         trading_period * 60,
         60 * 60 * 24,
+        0,
+        0.0,
     );
 
     for price in prices {
@@ -168,11 +170,11 @@ fn backtest(test_file_path: PathBuf, output_dir_path: PathBuf) {
         let (rsi, rsi_short, rsi_long, is_expanding, trend_type, is_breakout, is_crossover, adx) =
             market_data.get_market_detail();
 
-        let mut open_action_trendfollow = market_data.is_open_signaled(TradingStrategy::TrendFollow);
+        let mut open_action_trendfollow =
+            market_data.is_open_signaled(TradingStrategy::TrendFollow);
         let open_action_trendfollow = if open_action_trendfollow.len() == 0 {
             1.0
-        }
-        else {
+        } else {
             match open_action_trendfollow.pop().unwrap() {
                 debot_market_analyzer::TradeAction::BuyOpen(_) => 1.025,
                 debot_market_analyzer::TradeAction::SellOpen(_) => 0.975,
