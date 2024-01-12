@@ -19,12 +19,11 @@ def plot_time_series_data(file_path):
     is_crossovers = []
     adxs = []
     open_signal_trendfollows = []
-    open_signal_meanreversions = []
 
     with open(file_path, 'r') as file:
         for line in file:
             parts = line.strip().split(',')
-            if len(parts) == 12:
+            if len(parts) == 11:
                 try:
                     price = float(parts[0])
                     indicator = float(parts[1])
@@ -37,7 +36,6 @@ def plot_time_series_data(file_path):
                     is_crossover = float(parts[8])
                     adx = float(parts[9])
                     open_signal_trendfollow = float(parts[10])
-                    open_signal_meanreversion = float(parts[11])
 
                     prices.append(price)
                     indicators.append(indicator)
@@ -50,8 +48,6 @@ def plot_time_series_data(file_path):
                     is_crossovers.append(is_crossover)
                     adxs.append(adx)
                     open_signal_trendfollows.append(open_signal_trendfollow)
-                    open_signal_meanreversions.append(
-                        open_signal_meanreversion)
 
                 except ValueError:
                     print(f"Invalid data in file {file_path}: {line}")
@@ -91,7 +87,6 @@ def plot_time_series_data(file_path):
     plt.plot(is_crossovers, label='CrossOver')
     plt.plot(adxs, label='Adx')
     plt.plot(open_signal_trendfollows, label='Open signal Trendfollow')
-    # plt.plot(open_signal_meanreversions, label='Open signal MeanReversion')
     plt.title(f"Time Series Data for {os.path.basename(file_path)}")
     plt.xlabel("Time")
     plt.ylabel("Normalized Value")
