@@ -1,3 +1,4 @@
+use chrono::round;
 use chrono::Local;
 use clap::{App, Arg};
 use debot_db::TransactionLog;
@@ -83,7 +84,7 @@ fn run_tests(input_files_dir: &str, output_files_dir: &str) -> Result<()> {
 async fn download_files(test_files_dir: &str) {
     // Set up the DB handler
     let mongodb_uri = env::var("MONGODB_URI").expect("MONGODB_URI must be set");
-    let db_name = env::var("DB_NAME").expect("DB_NAME must be set");
+    let db_name = env::var("DB_NAME_BACKTEST").expect("DB_NAME_BACKTEST must be set");
     let transaction_log = TransactionLog::new(1000, 1000, 1000, &mongodb_uri, &db_name).await;
 
     // Download price data
@@ -151,52 +152,84 @@ fn backtest(test_file_path: PathBuf, output_dir_path: PathBuf) {
         }
     }
 
-    let short_period = 15 * 4;
-    let long_period = 60 * 4;
-    let trading_period = 60;
+    let short_period = 1;
+    let long_period = 3;
+    let trading_period = 1;
     let mut market_data = MarketData::new(
         "backtester".to_owned(),
         short_period * 60,
         long_period * 60,
         trading_period * 60,
         60 * 60 * 24,
-        0,
+        20,
+        3,
         0.0,
     );
 
+    let mut previous_price: Option<f64> = None;
+    let mut previous_crossover: Option<f64> = None;
+    let mut max_price_since_last_crossover: f64 = 0.0;
+    let mut min_price_since_last_crossover: f64 = f64::MAX;
+
     for price in prices {
         market_data.add_price(Some(price), None);
-        let market_condition = market_data.assess_market_condition();
-        let (rsi, rsi_short, rsi_long, is_expanding, trend_type, is_breakout, is_crossover, adx) =
-            market_data.get_market_detail();
+        let (crossover, spread) = market_data.get_market_detail();
+        let price_rise: Option<bool>;
 
-        let mut open_action_trendfollow =
-            market_data.is_open_signaled(TradingStrategy::TrendFollow);
-        let open_action_trendfollow = if open_action_trendfollow.len() == 0 {
-            1.0
-        } else {
-            match open_action_trendfollow.pop().unwrap() {
-                debot_market_analyzer::TradeAction::BuyOpen(_) => 1.025,
-                debot_market_analyzer::TradeAction::SellOpen(_) => 0.975,
-                _ => 1.0,
+        let mut trade_performance = 1.3;
+
+        if let Some(prev_price) = previous_price {
+            max_price_since_last_crossover = max_price_since_last_crossover.max(price);
+            min_price_since_last_crossover = min_price_since_last_crossover.min(price);
+
+            if crossover != 0.5 {
+                if let Some(previous_crossover_val) = previous_crossover {
+                    price_rise = if max_price_since_last_crossover > prev_price {
+                        Some(true)
+                    } else if min_price_since_last_crossover < prev_price {
+                        Some(false)
+                    } else {
+                        None
+                    };
+
+                    if let Some(price_rise_val) = price_rise {
+                        if previous_crossover_val > 0.5 {
+                            if price_rise_val {
+                                let up = max_price_since_last_crossover - prev_price;
+                                let down = prev_price - min_price_since_last_crossover;
+                                if up > spread * 10.0 {
+                                    trade_performance += 0.2;
+                                }
+                            } else {
+                                trade_performance -= 0.2;
+                            }
+                        } else {
+                            if price_rise_val {
+                                trade_performance -= 0.2;
+                            } else {
+                                let up = max_price_since_last_crossover - prev_price;
+                                let down = prev_price - min_price_since_last_crossover;
+                                if down > spread * 10.0 {
+                                    trade_performance += 0.2;
+                                }
+                            }
+                        }
+                    }
+
+                    max_price_since_last_crossover = price;
+                    min_price_since_last_crossover = price;
+                }
+                previous_crossover = Some(crossover);
             }
-        };
+        }
+
+        previous_price = Some(price);
 
         // Write the price and market condition to the output file
         if let Err(e) = writeln!(
             output_file,
-            "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}",
-            price,
-            market_condition.to_numeric(),
-            rsi,
-            rsi_short,
-            rsi_long,
-            is_expanding,
-            trend_type,
-            is_breakout,
-            is_crossover,
-            adx,
-            open_action_trendfollow,
+            "{}, {}, {}, {}",
+            price, crossover, trade_performance, spread
         ) {
             log::error!("Error writing to file: {}", e);
             return;
