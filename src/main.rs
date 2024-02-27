@@ -152,84 +152,70 @@ fn backtest(test_file_path: PathBuf, output_dir_path: PathBuf) {
         }
     }
 
-    let short_period = 1;
-    let long_period = 3;
-    let trading_period = 1;
+    let short_period = 60 * 1;
+    let long_period = 60 * 10;
+    let trading_period = 60 * 10;
     let mut market_data = MarketData::new(
         "backtester".to_owned(),
-        short_period * 60,
-        long_period * 60,
-        trading_period * 60,
+        short_period,
+        long_period,
+        trading_period,
         60 * 60 * 24,
         20,
         3,
-        0.0,
     );
 
-    let mut previous_price: Option<f64> = None;
-    let mut previous_crossover: Option<f64> = None;
-    let mut max_price_since_last_crossover: f64 = 0.0;
-    let mut min_price_since_last_crossover: f64 = f64::MAX;
+    let mut crossover_time: Option<usize> = None; // クロスオーバー発生時のインデックス（時間）
+    let mut target_price_achieved = false; // 目標価格に到達したかどうかのフラグ
 
-    for price in prices {
-        market_data.add_price(Some(price), None);
-        let (crossover, spread) = market_data.get_market_detail();
-        let price_rise: Option<bool>;
+    for (index, price) in prices.iter().enumerate() {
+        market_data.add_price(Some(*price), None);
+        let (crossover, spread, vola, vola2) = market_data.get_market_detail();
 
-        let mut trade_performance = 1.3;
+        let mut crossover_performance = 1.3;
 
-        if let Some(prev_price) = previous_price {
-            max_price_since_last_crossover = max_price_since_last_crossover.max(price);
-            min_price_since_last_crossover = min_price_since_last_crossover.min(price);
+        // クロスオーバーが発生した場合、現在のインデックス（時間）を記録
+        if vola2 > 0.3 && (crossover > 0.5 || crossover < 0.5) {
+            if crossover_time.is_some() {
+                crossover_performance -= 0.2;
+            }
+            crossover_time = Some(index);
+            target_price_achieved = false; // 目標価格到達フラグをリセット
+        }
 
-            if crossover != 0.5 {
-                if let Some(previous_crossover_val) = previous_crossover {
-                    price_rise = if max_price_since_last_crossover > prev_price {
-                        Some(true)
-                    } else if min_price_since_last_crossover < prev_price {
-                        Some(false)
-                    } else {
-                        None
-                    };
-
-                    if let Some(price_rise_val) = price_rise {
-                        if previous_crossover_val > 0.5 {
-                            if price_rise_val {
-                                let up = max_price_since_last_crossover - prev_price;
-                                let down = prev_price - min_price_since_last_crossover;
-                                if up > spread * 10.0 {
-                                    trade_performance += 0.2;
-                                }
-                            } else {
-                                trade_performance -= 0.2;
-                            }
-                        } else {
-                            if price_rise_val {
-                                trade_performance -= 0.2;
-                            } else {
-                                let up = max_price_since_last_crossover - prev_price;
-                                let down = prev_price - min_price_since_last_crossover;
-                                if down > spread * 10.0 {
-                                    trade_performance += 0.2;
-                                }
-                            }
-                        }
+        // クロスオーバー発生後の価格変動をトレーディング期間内で評価
+        if let Some(crossover_index) = crossover_time {
+            if index <= crossover_index + trading_period {
+                // ここで目標価格に到達したかどうかを評価
+                let spread2 = spread * 0.0005;
+                if crossover > 0.5 {
+                    let target_price = prices[crossover_index] + spread2;
+                    if *price >= target_price {
+                        target_price_achieved = true;
                     }
-
-                    max_price_since_last_crossover = price;
-                    min_price_since_last_crossover = price;
+                } else {
+                    let target_price = prices[crossover_index] - spread2;
+                    if *price <= target_price {
+                        target_price_achieved = true;
+                    }
                 }
-                previous_crossover = Some(crossover);
+            } else {
+                crossover_performance -= 0.2;
+                crossover_time = None;
             }
         }
 
-        previous_price = Some(price);
+        if target_price_achieved {
+            crossover_performance += 0.2;
+            crossover_time = None;
+            target_price_achieved = false;
+        }
 
         // Write the price and market condition to the output file
         if let Err(e) = writeln!(
             output_file,
-            "{}, {}, {}, {}",
-            price, crossover, trade_performance, spread
+            "{}, {}, {}, {}, {}",
+            price, crossover, crossover_performance, vola, vola2,
         ) {
             log::error!("Error writing to file: {}", e);
             return;

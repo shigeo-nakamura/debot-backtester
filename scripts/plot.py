@@ -4,39 +4,46 @@ import os
 import argparse
 import matplotlib.pyplot as plt
 import matplotlib
+import numpy as np
 matplotlib.use('TkAgg')
 
 
 def plot_time_series_data(file_path):
     prices = []
-    indicators = []
-    prices = []
-    price_shorts = []
-    price_longs = []
-    is_expandings = []
-    trend_types = []
-    is_breakouts = []
     is_crossovers = []
+    crossover_performances = []
     adxs = []
-    open_signal_trendfollows = []
-    open_action_grid_trades = []
-    is_range_bounds = []
-    performances = []
-    spreads = []
+    rsis = []
+    volas = []
+    rel_volas = []
 
     with open(file_path, 'r') as file:
         for line in file:
             parts = line.strip().split(',')
-            if len(parts) == 4:
+            if len(parts) == 5:
                 try:
                     price = float(parts[0])
                     is_crossover = float(parts[1])
-                    performance = float(parts[2])
-                    spread = float(parts[3]) / 10.0
+                    crossover_performance = float(parts[2])
+
+                    # adx = float(parts[3])
+                    # rounded_adx = np.round(adx, 2)
+                    # adxs.append(rounded_adx)
+
+                    # rsi = float(parts[4])
+                    # rounded_rsi = np.round(rsi, 2)
+                    # rsis.append(rounded_rsi)
+
+                    vola = float(parts[3])
+                    volas.append(vola)
+
+                    rel_vola = float(parts[4])
+                    rel_volas.append(rel_vola)
+
                     prices.append(price)
                     is_crossovers.append(is_crossover)
-                    performances.append(performance)
-                    spreads.append(spread)
+                    crossover_performances.append(crossover_performance)
+                   
 
                 except ValueError:
                     print(f"Invalid data in file {file_path}: {line}")
@@ -51,9 +58,9 @@ def plot_time_series_data(file_path):
     normalized_prices = [(price - min_price) /
                          (max_price - min_price) for price in prices]
 
-    min_value = 0
+    min_value = 0.0
     max_value = 1.5
-    yticks = [i/10 for i in range(int(min_value*10), int(max_value*10)+1)]
+    yticks = [i/20 for i in range(int(min_value*20), int(max_value*20)+1)]
 
     plt.figure(figsize=(10, 6))
 
@@ -67,7 +74,12 @@ def plot_time_series_data(file_path):
 
     plt.plot(normalized_prices, label='Normalized Price')
     plt.plot(is_crossovers, label='CrossOver')
-    plt.plot(performances, label='Performance')
+    plt.plot(crossover_performances, label='CrossOver Performance')
+    # plt.plot(adxs, label='ADX')
+    # plt.plot(rsis, label='RSI')
+    # plt.plot(volas, label='Volatility')
+    plt.plot(rel_volas, label='Volatility/ATR')
+    # plt.plot(breakout_performances, label='Breakout Performance')
     # plt.plot(spreads, label='Spread')
     # plt.plot(open_action_grid_trades, label='Grid Trades')
     plt.title(f"Time Series Data for {os.path.basename(file_path)}")
