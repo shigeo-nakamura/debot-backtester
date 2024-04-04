@@ -10,39 +10,21 @@ matplotlib.use('TkAgg')
 
 def plot_time_series_data(file_path):
     prices = []
-    is_crossovers = []
-    crossover_performances = []
-    adxs = []
-    rsis = []
-    volas = []
-    rel_volas = []
+    open_signals = []
+    close_signals = []
 
     with open(file_path, 'r') as file:
         for line in file:
             parts = line.strip().split(',')
-            if len(parts) == 5:
+            if len(parts) == 3:
                 try:
                     price = float(parts[0])
-                    is_crossover = float(parts[1])
-                    crossover_performance = float(parts[2])
-
-                    # adx = float(parts[3])
-                    # rounded_adx = np.round(adx, 2)
-                    # adxs.append(rounded_adx)
-
-                    # rsi = float(parts[4])
-                    # rounded_rsi = np.round(rsi, 2)
-                    # rsis.append(rounded_rsi)
-
-                    vola = float(parts[3])
-                    volas.append(vola)
-
-                    rel_vola = float(parts[4])
-                    rel_volas.append(rel_vola)
+                    open_signal = float(parts[1])
+                    close_signal = float(parts[2])
 
                     prices.append(price)
-                    is_crossovers.append(is_crossover)
-                    crossover_performances.append(crossover_performance)
+                    open_signals.append(open_signal)
+                    close_signals.append(close_signal)
                    
 
                 except ValueError:
@@ -73,15 +55,9 @@ def plot_time_series_data(file_path):
         plt.axhline(y=ytick, color='gray', linestyle='--', linewidth=0.5)
 
     plt.plot(normalized_prices, label='Normalized Price')
-    plt.plot(is_crossovers, label='CrossOver')
-    plt.plot(crossover_performances, label='CrossOver Performance')
-    # plt.plot(adxs, label='ADX')
-    # plt.plot(rsis, label='RSI')
-    # plt.plot(volas, label='Volatility')
-    plt.plot(rel_volas, label='Volatility/ATR')
-    # plt.plot(breakout_performances, label='Breakout Performance')
-    # plt.plot(spreads, label='Spread')
-    # plt.plot(open_action_grid_trades, label='Grid Trades')
+    plt.plot(open_signals, label='Open signal')
+    plt.plot(close_signals, label='Close signal')
+
     plt.title(f"Time Series Data for {os.path.basename(file_path)}")
     plt.xlabel("Time")
     plt.ylabel("Normalized Value")

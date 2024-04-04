@@ -4,6 +4,8 @@ use clap::{App, Arg};
 use debot_db::TransactionLog;
 use debot_market_analyzer::MarketData;
 use debot_market_analyzer::TradingStrategy;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::Decimal;
 use std::env;
 use std::fs;
 use std::fs::File;
@@ -152,71 +154,68 @@ fn backtest(test_file_path: PathBuf, output_dir_path: PathBuf) {
         }
     }
 
-    let short_period = 60 * 1;
-    let long_period = 60 * 10;
-    let trading_period = 60 * 10;
+    let short_period = 60 * 30 / 10;
+    let long_period = 60 * 240 / 10;
+    let execution_period = 60 * 1 / 10;
+    let trading_period = 60 * 60 / 10;
     let mut market_data = MarketData::new(
         "backtester".to_owned(),
         short_period,
         long_period,
         trading_period,
+        execution_period,
         60 * 60 * 24,
-        20,
-        3,
     );
 
     let mut crossover_time: Option<usize> = None; // クロスオーバー発生時のインデックス（時間）
     let mut target_price_achieved = false; // 目標価格に到達したかどうかのフラグ
 
     for (index, price) in prices.iter().enumerate() {
-        market_data.add_price(Some(*price), None);
-        let (crossover, spread, vola, vola2) = market_data.get_market_detail();
+        market_data.add_price(Decimal::from_f64(*price), None);
+        let (open_signal, close_signal) = market_data.get_market_detail();
 
-        let mut crossover_performance = 1.3;
+        //     let mut crossover_performance = 1.3;
+        //     let spread = 100.0;
 
-        // クロスオーバーが発生した場合、現在のインデックス（時間）を記録
-        if vola2 > 0.3 && (crossover > 0.5 || crossover < 0.5) {
-            if crossover_time.is_some() {
-                crossover_performance -= 0.2;
-            }
-            crossover_time = Some(index);
-            target_price_achieved = false; // 目標価格到達フラグをリセット
-        }
+        //     // クロスオーバーが発生した場合、現在のインデックス（時間）を記録
+        //     if (crossover > 0.5 || crossover < 0.5) {
+        //         if crossover_time.is_some() {
+        //             crossover_performance -= 0.2;
+        //         }
+        //         crossover_time = Some(index);
+        //         target_price_achieved = false; // 目標価格到達フラグをリセット
+        //     }
 
-        // クロスオーバー発生後の価格変動をトレーディング期間内で評価
-        if let Some(crossover_index) = crossover_time {
-            if index <= crossover_index + trading_period {
-                // ここで目標価格に到達したかどうかを評価
-                let spread2 = spread * 0.0005;
-                if crossover > 0.5 {
-                    let target_price = prices[crossover_index] + spread2;
-                    if *price >= target_price {
-                        target_price_achieved = true;
-                    }
-                } else {
-                    let target_price = prices[crossover_index] - spread2;
-                    if *price <= target_price {
-                        target_price_achieved = true;
-                    }
-                }
-            } else {
-                crossover_performance -= 0.2;
-                crossover_time = None;
-            }
-        }
+        //     // クロスオーバー発生後の価格変動をトレーディング期間内で評価
+        //     if let Some(crossover_index) = crossover_time {
+        //         if index <= crossover_index + execution_period {
+        //             // ここで目標価格に到達したかどうかを評価
+        //             let spread2 = spread * 0.0005;
+        //             if crossover > 0.5 {
+        //                 let target_price = prices[crossover_index] + spread2;
+        //                 if *price >= target_price {
+        //                     target_price_achieved = true;
+        //                 }
+        //             } else {
+        //                 let target_price = prices[crossover_index] - spread2;
+        //                 if *price <= target_price {
+        //                     target_price_achieved = true;
+        //                 }
+        //             }
+        //         } else {
+        //             crossover_performance -= 0.2;
+        //             crossover_time = None;
+        //         }
+        //     }
 
-        if target_price_achieved {
-            crossover_performance += 0.2;
-            crossover_time = None;
-            target_price_achieved = false;
-        }
+        //     if target_price_achieved {
+        //         crossover_performance += 0.2;
+        //         crossover_time = None;
+        //         target_price_achieved = false;
+        //     }
 
         // Write the price and market condition to the output file
-        if let Err(e) = writeln!(
-            output_file,
-            "{}, {}, {}, {}, {}",
-            price, crossover, crossover_performance, vola, vola2,
-        ) {
+        if let Err(e) = writeln!(output_file, "{}, {}, {}", price, open_signal, close_signal,) {
             log::error!("Error writing to file: {}", e);
             return;
         }
